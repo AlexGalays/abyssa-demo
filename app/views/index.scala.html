@@ -1,0 +1,105 @@
+@()
+
+<!DOCTYPE html>
+<html>
+    <head>
+        <meta charset="utf-8">
+        <title>Abyssa example</title>
+
+        <link rel="stylesheet" media="screen" href="/assets/stylesheets/foundation.css">
+        <link rel="stylesheet" media="screen" href="/assets/stylesheets/main.css">
+    </head>
+
+    <body class="loading">
+      <nav class="top-bar">
+        <a href="">Abyssa</a>
+        <ul class="right">
+          <li><a href="news">News</a></li>
+          <li><a href="gallery">Gallery</a></li>
+        </ul>
+      </nav>
+
+      <header>
+        <div class="row">
+          <h1></h1>
+          <div id="header-controls"></div>
+        </div>
+      </header>
+
+      <section>
+        <div id="main-content" class="row"></div>
+      </section>
+
+
+      <div id="confirm-dialog" class="reveal-modal">
+        <h2></h2>
+        <p class="lead"><img src="/assets/images/meme.png"></img></p>
+        <button class="small confirm-yes">YES</button>
+        <button class="small confirm-no">NO</button>
+      </div>
+
+    </body>
+
+    <script id="gallery-template" type="text/template">
+      <img src="http://lorempixel.com/300/200" />
+      <img src="http://lorempixel.com/200/200" />
+      <img src="http://lorempixel.com/305/200" />
+    </script>
+
+    <script id="news-controls-template" type="text/template">
+      <ul class="button-group">
+        <li><a href="news" class="button secondary">All</a></li>
+        <li><a href="news?color=blue" class="button secondary">Blues</a></li>
+        <li><a href="news?color=green" class="button secondary">Greens</a></li>
+      </ul>
+    </script>
+
+    <script id="news-template" type="text/template">
+      <ul>
+        <li class="template news-entry">
+          <a>
+            <div>
+              <div class="color"></div>
+              <h4>blaaa</h4>
+            </div>
+          </a>
+        </li>
+      </ul>
+    </script>
+
+    <script id="news-item-template" type="text/template">
+      <div id="news-item">
+        <h1></h1>
+        <a class="button secondary">Edit</a>
+        <div><pre></pre></div>
+      </div>
+    </script>
+
+    <script id="news-item-edit-template" type="text/template">
+      <div id="news-item-edit">
+        <h1></h1>
+        <a class="button secondary">Show</a>
+        <textarea></textarea>
+      </div>
+    </script>
+
+    <script id="animation" type="text/template">
+      <div id="fadingBarsG">
+        <div id="fadingBarsG_1" class="fadingBarsG"></div>
+        <div id="fadingBarsG_2" class="fadingBarsG"></div>
+        <div id="fadingBarsG_3" class="fadingBarsG"></div>
+        <div id="fadingBarsG_4" class="fadingBarsG"></div>
+        <div id="fadingBarsG_5" class="fadingBarsG"></div>
+        <div id="fadingBarsG_6" class="fadingBarsG"></div>
+        <div id="fadingBarsG_7" class="fadingBarsG"></div>
+        <div id="fadingBarsG_8" class="fadingBarsG"></div>
+      </div>
+    </script>
+
+    <script src="//ajax.googleapis.com/ajax/libs/jquery/2.0.0/jquery.min.js"></script>
+    <script
+      data-main="/assets/javascripts/main"
+      src="/assets/javascripts/require.js">
+    </script>
+
+</html>

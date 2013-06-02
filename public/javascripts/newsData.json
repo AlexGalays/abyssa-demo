@@ -1,0 +1,14 @@
+{
+  "items": [
+    {"id": 1, "title": "I am news #1", "color": "blue"},
+    {"id": 2, "title": "I am news #2", "color": "green"},
+    {"id": 3, "title": "I am news #3", "color": "green"},
+    {"id": 4, "title": "I am news #4", "color": "blue"},
+    {"id": 5, "title": "I am news #5", "color": "green"},
+    {"id": 6, "title": "I am news #6", "color": "blue"},
+    {"id": 7, "title": "I am news #7", "color": "blue"},
+    {"id": 8, "title": "I am news #8", "color": "blue"},
+    {"id": 9, "title": "I am news #9", "color": "green"},
+    {"id": 10, "title": "I am news #10", "color": "green"}
+  ]
+}
