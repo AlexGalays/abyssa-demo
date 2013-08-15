@@ -20,6 +20,10 @@ ul {
   list-style: none;
 }
 
+.template {
+  display: none;
+}
+
 nav.top-bar {
   margin-bottom: 0;
 }
@@ -44,6 +48,8 @@ header {
   background-color: #2ba6cb;
   padding: 12px 0;
   height: 130px;
+
+  transition: opacity 0.3s;
 }
 
 header.red {
@@ -130,6 +136,10 @@ pre {
   font-family: inherit;
   margin-left: 1px;
   margin-top: 1px;
+}
+
+#news-item.loading, #news-item-edit.loading {
+  opacity: 0;
 }
 
 /* Modal confirm */

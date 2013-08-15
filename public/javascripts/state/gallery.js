@@ -3,7 +3,6 @@ define(function(require) {
 var State         = require('lib/abyssa').State,
     mainContent   = require('dom').mainContent,
     confirmDialog = require('confirmDialog'),
-    animation     = require('stateChangeAnimation')
     template      = $('#gallery-template').html();
 
 
@@ -17,7 +16,6 @@ return State('gallery', {
   },
 
   exitPrereqs: function() {
-    animation.stop();
     return confirmDialog('Are you sure?');
   }
 

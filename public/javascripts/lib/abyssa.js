@@ -2869,25 +2869,6 @@ function isString(instance) {
 
 function noop() {}
 
-function memoize(func) {
-  return function() {
-    var args  = Array.prototype.slice.call(arguments),
-        hash  = '',
-        i     = args.length,
-        memos = func.__memo || (func.__memo = {}),
-        arg;
-
-    while (i--) {
-      arg = args[i];
-      hash += (arg === Object(arg)) ? JSON.stringify(arg) : arg;
-    }
-
-    return (hash in memos)
-      ? memos[hash]
-      : (memos[hash] = func.apply(this, args));
-  };
-}
-
 function arrayToObject(array) {
   return array.reduce(function(obj, item) {
     obj[item] = 1;
@@ -2940,6 +2921,8 @@ function Transition(fromState, toState, params, paramDiff) {
   transition = prereqs(enters, exits, params).then(function() {
     if (!cancelled) doTransition(enters, exits, params);
   });
+
+  asyncPromises.newTransitionStarted();
 
   function then(completed, failed) {
     return transition.then(
@@ -2999,9 +2982,11 @@ function doTransition(enters, exits, params) {
     state.exit(state._exitPrereqs && state._exitPrereqs.value);
   });
 
+  asyncPromises.allowed = true;
   enters.forEach(function(state) {
     state.enter(params, state._enterPrereqs && state._enterPrereqs.value);
   });
+  asyncPromises.allowed = false;
 }
 
 /*
@@ -3047,6 +3032,55 @@ function transitionStates(state, root, paramOnlyChange) {
   var inclusive = !root || paramOnlyChange;
   return withParents(state, root || state.root, inclusive);
 }
+
+
+var asyncPromises = (function () {
+
+  var that;
+  var activeDeferreds = [];
+
+  /*
+   * Returns a promise that will not be fullfilled if the navigation context
+   * changes before the wrapped promise is fullfilled. 
+   */
+  function register(promise) {
+    if (!that.allowed)
+      throw new Error('Async can only be called from within state.enter()');
+
+    var defer = when.defer();
+
+    activeDeferreds.push(defer);
+
+    when(promise).then(
+      function(value) {
+        if (activeDeferreds.indexOf(defer) > -1)
+          defer.resolve(value);
+      },
+      function(error) {
+        if (activeDeferreds.indexOf(defer) > -1)
+          defer.reject(error);
+      }
+    );
+
+    return defer.promise;
+  }
+
+  function newTransitionStarted() {
+    activeDeferreds.length = 0;
+  }
+
+  that = {
+    register: register,
+    newTransitionStarted: newTransitionStarted,
+    allowed: false
+  };
+
+  return that;
+
+})();
+
+
+Abyssa.Async = asyncPromises.register;
 
 /*
 * Create a new State instance.
@@ -3288,6 +3322,9 @@ Abyssa.State = State;
 /*
 * Create a new Router instance, passing any state defined declaratively.
 * More states can be added using addState() before the router is initialized.
+*
+* Because a router manages global state (The URL), only one instance of Router
+* should be used inside an application.
 */
 function Router(declarativeStates) {
   var router = {},
@@ -3359,7 +3396,7 @@ function Router(declarativeStates) {
   }
 
   /*
-  * Return the set of all the params that changed (Either added, removed or mutated).
+  * Return the set of all the params that changed (Either added, removed or changed).
   */
   function paramDiff(oldParams, newParams) {
     var diff = {},

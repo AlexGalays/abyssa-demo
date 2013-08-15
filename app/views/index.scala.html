@@ -55,12 +55,13 @@
     </script>
 
     <script id="news-template" type="text/template">
+      {{> loading-animation}}
       <ul>
         <li class="template news-entry">
           <a>
             <div>
               <div class="color"></div>
-              <h4>blaaa</h4>
+              <h4></h4>
             </div>
           </a>
         </li>
@@ -68,7 +69,8 @@
     </script>
 
     <script id="news-item-template" type="text/template">
-      <div id="news-item">
+      {{> loading-animation}}
+      <div id="news-item" class="loading">
         <h1></h1>
         <a class="button secondary">Edit</a>
         <div><pre></pre></div>
@@ -76,7 +78,8 @@
     </script>
 
     <script id="news-item-edit-template" type="text/template">
-      <div id="news-item-edit">
+      {{> loading-animation}}
+      <div id="news-item-edit" class="loading">
         <h1></h1>
         <a class="button secondary">Show</a>
         <textarea></textarea>
@@ -96,10 +99,11 @@
       </div>
     </script>
 
+    <script src="/assets/javascripts/lib/handlebars.js"></script>
     <script src="//ajax.googleapis.com/ajax/libs/jquery/2.0.0/jquery.min.js"></script>
     <script
       data-main="/assets/javascripts/main"
-      src="/assets/javascripts/require.js">
+      src="/assets/javascripts/lib/require.js">
     </script>
 
 </html>

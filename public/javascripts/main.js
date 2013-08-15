@@ -1,8 +1,9 @@
 define(function(require) {
 
+require('partials');
+
 var router    = require('router'),
-    body      = require('dom').body,
-    animation = require('stateChangeAnimation');
+    body      = require('dom').body;
 
 
 router.addState('index', require('state/index'));
@@ -14,10 +15,6 @@ router.addState('notFound', require('state/notFound'));
 router.transition.ended.addOnce(function() {
   body.removeClass('loading');
 });
-
-// Display an animation when the router is busy
-router.transition.started.add(animation.start);
-router.transition.ended.add(animation.stop);
 
 router.init();
 

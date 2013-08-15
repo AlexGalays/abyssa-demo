@@ -1,12 +1,13 @@
 define(function(require) {
 
 
-var State    = require('lib/abyssa').State,
-    Render   = require('lib/durendal'),
-    item     = require('state/newsItem'),
-    dom      = require('dom'),
-    controls = $('#news-controls-template').html(),
-    newsList = $('#news-template').html();
+var State     = require('lib/abyssa').State,
+    Async     = require('lib/abyssa').Async,
+    Render    = require('lib/durendal'),
+    item      = require('state/newsItem'),
+    dom       = require('dom'),
+    controls  = $('#news-controls-template').html(),
+    newsList  = Handlebars.compile($('#news-template').html());
 
 
 return State('news', {
@@ -19,33 +20,27 @@ return State('news', {
   // The default news state, showing a list of all the news.
   show: State('?color', {
 
-    enter: function(params, news) {
+    enter: function(params) {
       dom.headerControls.html(controls);
-      dom.mainContent.html(newsList);
+      dom.mainContent.html(newsList());
 
-      var items = news.items;
+      Async(getNews()).then(function(news) {
+        $('#fadingBarsG').remove();
 
-      // Filter based on the optional query string.
-      var filtered = params.color
-        ? items.filter(function(item) { return item.color == params.color; })
-        : items;
+        var items = news.items;
 
-      // And render in the DOM.
-      Render(filtered).into('#main-content ul').each(function(node, item) {
-        $(node)
-          .find('h4').text(item.title).end()
-          .find('.color').addClass(item.color).end()
-          .find('a').attr('href', 'news/' + item.id);
-      })();
-    },
+        // Filter based on the optional query string.
+        var filtered = params.color
+          ? items.filter(function(item) { return item.color == params.color; })
+          : items;
 
-    enterPrereqs: function() {
-      // Simulate some network latency
-      var latency = $.Deferred();
-      setTimeout(function() { latency.resolve(); }, 600);
-
-      return latency.then(function() {
-        return $.getJSON('/assets/javascripts/newsData.json');
+        // And render in the DOM.
+        Render(filtered).into('#main-content ul').each(function(node, item) {
+          $(node)
+            .find('h4').text(item.title).end()
+            .find('.color').addClass(item.color).end()
+            .find('a').attr('href', 'news/' + item.id);
+        })();
       });
     },
 
@@ -60,6 +55,17 @@ return State('news', {
   item: item
 
 });
+
+
+function getNews() {
+  // Simulate some network latency
+  var latency = $.Deferred();
+  setTimeout(function() { latency.resolve(); }, 600);
+
+  return latency.then(function() {
+    return $.getJSON('/assets/javascripts/newsData.json');
+  });
+}
 
 
 });
