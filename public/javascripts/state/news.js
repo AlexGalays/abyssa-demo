@@ -6,8 +6,7 @@ var State    = require('lib/abyssa').State,
     item     = require('state/newsItem'),
     dom      = require('dom'),
     controls = $('#news-controls-template').html(),
-    newsList = $('#news-template').html(),
-    data;
+    newsList = $('#news-template').html();
 
 
 return State('news', {
@@ -24,9 +23,7 @@ return State('news', {
       dom.headerControls.html(controls);
       dom.mainContent.html(newsList);
 
-      data = news;
-
-      var items = data.items;
+      var items = news.items;
 
       // Filter based on the optional query string.
       var filtered = params.color
@@ -43,7 +40,13 @@ return State('news', {
     },
 
     enterPrereqs: function() {
-      return data || $.getJSON('/assets/javascripts/newsData.json');
+      // Simulate some network latency
+      var latency = $.Deferred();
+      setTimeout(function() { latency.resolve(); }, 600);
+
+      return latency.then(function() {
+        return $.getJSON('/assets/javascripts/newsData.json');
+      });
     },
 
     exit: function() {
