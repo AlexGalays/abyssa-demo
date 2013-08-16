@@ -158,6 +158,24 @@ pre {
   margin-right: 14px;
 }
 
+.button {
+  transition: none;
+}
+
+.button.secondary {
+  border-color: #666;
+}
+.button.secondary:hover {
+  background-color: #DADADA;
+}
+
+.button.selected {
+  background-color: #CACACA;
+}
+.button.selected:hover {
+  background-color: #CACACA;
+}
+
 
 /* Animated loader */
 

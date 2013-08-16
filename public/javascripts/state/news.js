@@ -24,6 +24,8 @@ return State('news', {
       dom.headerControls.html(controls);
       dom.mainContent.html(newsList());
 
+      updateButtonSelection(params);
+
       Async(getNews()).then(function(news) {
         $('#fadingBarsG').remove();
 
@@ -56,6 +58,12 @@ return State('news', {
 
 });
 
+
+function updateButtonSelection(params) {
+  dom.headerControls.find('a')
+    .removeClass('selected')
+    .filter('.' + (params.color || 'all')).addClass('selected');
+}
 
 function getNews() {
   // Simulate some network latency
