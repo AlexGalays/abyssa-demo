@@ -56,10 +56,6 @@ header.red {
   background-color: #eb5b4d;
 }
 
-body.loading header {
-  opacity: 0;
-}
-
 header h1 {
   color: white;
   font-weight: 500;
