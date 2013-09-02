@@ -2,7 +2,6 @@ define(function(require) {
 
 var State        = require('lib/abyssa').State,
     Async        = require('lib/abyssa').Async,
-    router       = require('router'),
     mainContent  = require('dom').mainContent,
     showTemplate = Handlebars.compile($('#news-item-template').html()),
     editTemplate = Handlebars.compile($('#news-item-edit-template').html()),
