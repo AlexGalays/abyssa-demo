@@ -1,4 +1,4 @@
-// abyssa-js 1.0.0
+// abyssa-js 1.1.2
 define(function() {
 
 var Abyssa = {};
@@ -3136,6 +3136,7 @@ function State() {
     state.children = getChildren();
     state.fullName = getFullName();
     state.root = state.parents[state.parents.length - 1];
+    state.async = Abyssa.Async;
 
     eachChildState(function(name, childState) {
       childState.init(name, state);
@@ -3297,7 +3298,7 @@ function getArgs(args) {
   }
   else if (args.length == 2) {
     result.path = arg1;
-    result.options = arg2;
+    result.options = (typeof arg2 == 'object') ? arg2 : {enter: arg2};
   }
 
   // Extract the query string
@@ -3349,6 +3350,8 @@ function Router(declarativeStates) {
   roads.shouldTypecast = true;
   // Nil transitions are prevented from our side.
   roads.ignoreState = true;
+
+  interceptAnchorClicks(router);
 
   /*
   * Setting a new state will start a transition from the current state to the target state.
@@ -3622,7 +3625,7 @@ function Router(declarativeStates) {
 
     if (hasQuery) params.query = query;
 
-    return state.route.interpolate(params).replace('/?', '?');
+    return '/' + state.route.interpolate(params).replace('/?', '?');
   }
 
   // Public methods
@@ -3696,6 +3699,29 @@ Router.enableLogs = function() {
 
 
 Abyssa.Router = Router;
+
+function interceptAnchorClicks(router) {
+  document.addEventListener('click', function(evt) {
+    if (evt.defaultPrevented || evt.metaKey || evt.ctrlKey || evt.button == 1) return;
+
+    var anchor = anchorTarget(evt.target);
+
+    if (!anchor) return;
+    if (anchor.getAttribute('target') == '_blank') return;
+    if (anchor.hostname != location.hostname) return;
+
+    evt.preventDefault();
+    router.state(anchor.getAttribute('href'));
+  });
+}
+
+
+function anchorTarget(target) {
+  while (target) {
+    if (target.nodeName == 'A') return target;
+    target = target.parentNode;
+  }
+}
 
 
 return Abyssa;
