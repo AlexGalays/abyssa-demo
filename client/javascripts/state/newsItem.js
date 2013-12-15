@@ -11,7 +11,8 @@ var State        = require('abyssa').State,
     sidePanel    = $('#side-panel'),
     panelContent = $('#side-panel-content'),
     news,
-    panelOpened;
+    panelOpened,
+    goingBackToNews;
 
 
 var state = State(':id', {
@@ -19,7 +20,7 @@ var state = State(':id', {
   enter: function(params) {
     $(document).on('click', onDocumentClick);
 
-    var panel = openPanel();
+    var panel = when(openPanel()).then(startLoading);
 
     var newsData = when(getNews(params.id)).then(function(data) {
       if (!data) {
@@ -35,13 +36,15 @@ var state = State(':id', {
       .then(function(values) { return values[1]; });
   },
 
-  exitPrereqs: function() {
-    if (!this.router.currentState().isIn(this.fullName))
-      return closePanel();
-  },
-
   exit: function() {
     $(document).off('click', onDocumentClick);
+
+    if (goingBackToNews)
+      closePanel();
+    else if (!this.router.currentState().isIn(this.fullName))
+      closePanel(true);
+
+    goingBackToNews = false;
   },
 
   // The show and edit state share a common parent: news.item. This means that each of these states
@@ -85,17 +88,21 @@ var state = State(':id', {
 
 function openPanel() {
   if (panelOpened)
-    return when(startLoading)
+    return 'alreadyOpened';
   else {
     panelOpened = true;
-    return Zanimo.transition(sidePanel[0], 'transform', 'translate3d(0, 0, 0)', 300, 'ease').then(startLoading);
+    return Zanimo.transition(sidePanel[0], 'transform', 'translate3d(0, 0, 0)', 300, 'ease');
   }
 }
 
-function closePanel() {
+function closePanel(atOnce) {
   panelOpened = false;
-  return Zanimo.transition(sidePanel[0], 'transform', 'translate3d(100%, 0, 0)', 100, 'ease')
-    .then(resetPanelContent);
+
+  if (atOnce)
+    Zanimo.transform(sidePanel[0], 'translate3d(100%, 0, 0)', true);
+  else 
+    Zanimo.transition(sidePanel[0], 'transform', 'translate3d(100%, 0, 0)', 100, 'ease')
+      .then(resetPanelContent);
 }
 
 function startLoading() {
@@ -119,6 +126,7 @@ function onDocumentClick(event) {
 }
 
 function backToNews() {
+  goingBackToNews = true;
   state.router.backTo('news.show');
 }
 
