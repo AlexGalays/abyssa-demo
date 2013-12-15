@@ -30,8 +30,11 @@
         <div id="main-content" class="row"></div>
       </section>
 
+      <div id="side-panel">
+        <div id="side-panel-content"></div>
+      </div>
 
-      <div id="confirm-dialog" class="reveal-modal">
+      <div id="confirm-dialog" class="reveal-modal" data-reveal>
         <h2></h2>
         <p class="lead"><img src="/assets/images/meme.png"></img></p>
         <button class="small confirm-yes">YES</button>
@@ -41,9 +44,11 @@
     </body>
 
     <script id="gallery-template" type="text/template">
-      <img src="http://lorempixel.com/300/200" />
-      <img src="http://lorempixel.com/200/200" />
-      <img src="http://lorempixel.com/305/200" />
+      <div class="fade-in-animation">
+        <img src="http://lorempixel.com/300/200"/>
+        <img src="http://lorempixel.com/200/200"/>
+        <img src="http://lorempixel.com/305/200"/>
+      </div>
     </script>
 
     <script id="news-controls-template" type="text/template">
@@ -55,55 +60,39 @@
     </script>
 
     <script id="news-template" type="text/template">
-      {{> loading-animation}}
       <ul>
-        <li class="template news-entry">
-          <a>
+        {{#each this}}
+        <li class="news-entry">
+          <a {{link 'news.item.show' id=id}}>
             <div>
-              <div class="color"></div>
-              <h4></h4>
+              <div class="color {{ color }}"></div>
+              <h4>{{ title }}</h4>
             </div>
           </a>
         </li>
+        {{/each}}
       </ul>
     </script>
 
     <script id="news-item-template" type="text/template">
-      {{> loading-animation}}
-      <div id="news-item" class="loading">
-        <h1></h1>
-        <a class="button secondary">Edit</a>
-        <div><pre></pre></div>
+      <div id="news-item">
+        <h1>{{ title }}</h1>
+        <a class="button secondary" {{link 'news.item.edit' id=id}}>Edit</a>
+        <div><pre>{{ body }}</pre></div>
       </div>
     </script>
 
     <script id="news-item-edit-template" type="text/template">
-      {{> loading-animation}}
-      <div id="news-item-edit" class="loading">
-        <h1></h1>
-        <a class="button secondary">Show</a>
-        <textarea></textarea>
+      <div id="news-item-edit">
+        <h1>{{ title }}</h1>
+        <a class="button secondary" {{link 'news.item.show' id=id}}>Show</a>
+        <textarea>{{ body }}</textarea>
       </div>
     </script>
 
-    <script id="animation" type="text/template">
-      <div id="fadingBarsG">
-        <div id="fadingBarsG_1" class="fadingBarsG"></div>
-        <div id="fadingBarsG_2" class="fadingBarsG"></div>
-        <div id="fadingBarsG_3" class="fadingBarsG"></div>
-        <div id="fadingBarsG_4" class="fadingBarsG"></div>
-        <div id="fadingBarsG_5" class="fadingBarsG"></div>
-        <div id="fadingBarsG_6" class="fadingBarsG"></div>
-        <div id="fadingBarsG_7" class="fadingBarsG"></div>
-        <div id="fadingBarsG_8" class="fadingBarsG"></div>
-      </div>
-    </script>
-
-    <script src="/assets/javascripts/lib/handlebars.js"></script>
-    <script src="//ajax.googleapis.com/ajax/libs/jquery/2.0.0/jquery.min.js"></script>
-    <script
-      data-main="/assets/javascripts/main"
-      src="/assets/javascripts/lib/require.js">
-    </script>
+    <script src="/assets/javascripts/lib/jquery.js"></script>
+    <script src="/assets/javascripts/lib/foundation.js"></script>
+    <script src="/assets/javascripts/lib/foundation.reveal.js"></script>
+    <script src="/assets/javascripts/app.js"></script>
 
 </html>

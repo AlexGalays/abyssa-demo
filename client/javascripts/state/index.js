@@ -1,16 +1,12 @@
-define(function(require) {
 
-var State       = require('lib/abyssa').State,
-    mainContent = require('dom').mainContent;
+var State       = require('abyssa').State,
+    mainContent = require('../dom').mainContent;
 
-return State({
+module.exports = State({
   // This is a custom data property.
   title: 'Home page',
   
   enter: function() {
     mainContent.text('This is the index. Check "News" for an example of nested states');
   }
-});
-
-
 });

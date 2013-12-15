@@ -13,3 +13,4 @@ dist
 /.project
 /RUNNING_PID
 /.settings
+client/javascripts/node_modules

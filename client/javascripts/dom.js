@@ -1,6 +1,5 @@
-define(function(require) {
 
-return {
+module.exports = {
   contentParent:  $('section'),
   mainContent:    $('#main-content'),
   header:         $('header'),
@@ -8,5 +7,3 @@ return {
   sectionTitle:   $('header h1'),
   body:           $('body')
 };
-
-});
