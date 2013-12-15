@@ -18,6 +18,7 @@ var state = State('news', {
   // The entire news section is going to have that great red header background.
   enter: function() {
     dom.header.addClass('red');
+    dom.mainContent.html('');
   },
 
   // We exit the whole news state subtree, clean up.
@@ -59,7 +60,6 @@ var state = State('news', {
 function prepareDOM(params) {
   dom.headerControls.html(controls);
 
-  dom.mainContent.html('');
   spinner.spin(dom.mainContent[0]);
 
   updateButtonSelection(params);

@@ -11,14 +11,15 @@ var State        = require('abyssa').State,
     sidePanel    = $('#side-panel'),
     panelContent = $('#side-panel-content'),
     news,
-    panelOpened,
-    goingBackToNews;
+    panelOpened;
 
 
 var state = State(':id', {
 
   enter: function(params) {
     $(document).on('click', onDocumentClick);
+
+    resetPanelContent();
 
     var panel = when(openPanel()).then(startLoading);
 
@@ -39,12 +40,12 @@ var state = State(':id', {
   exit: function() {
     $(document).off('click', onDocumentClick);
 
-    if (goingBackToNews)
-      closePanel();
-    else if (!this.router.currentState().isIn(this.fullName))
-      closePanel(true);
+    var destination = this.router.currentState();
 
-    goingBackToNews = false;
+    if (destination.is('news.show'))
+      closePanel();
+    else if (!destination.isIn(this.fullName))
+      closePanel(true);
   },
 
   // The show and edit state share a common parent: news.item. This means that each of these states
@@ -99,7 +100,8 @@ function closePanel(atOnce) {
   panelOpened = false;
 
   if (atOnce)
-    Zanimo.transform(sidePanel[0], 'translate3d(100%, 0, 0)', true);
+    Zanimo.transform(sidePanel[0], 'translate3d(100%, 0, 0)', true)
+      .then(resetPanelContent);
   else 
     Zanimo.transition(sidePanel[0], 'transform', 'translate3d(100%, 0, 0)', 100, 'ease')
       .then(resetPanelContent);
@@ -126,7 +128,6 @@ function onDocumentClick(event) {
 }
 
 function backToNews() {
-  goingBackToNews = true;
   state.router.backTo('news.show');
 }
 
