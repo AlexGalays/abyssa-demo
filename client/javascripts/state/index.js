@@ -1,10 +1,10 @@
 
-var State       = require('abyssa').State,
-    mainContent = require('../dom').mainContent;
+var ContentState = require('./contentState'),
+    mainContent  = require('../dom').mainContent;
 
-module.exports = State({
+module.exports = ContentState('', {
   // This is a custom data property.
-  title: 'Home page',
+  data: { title: 'Home page' },
   
   enter: function() {
     mainContent.text('This is the index. Check "News" for an example of nested states');

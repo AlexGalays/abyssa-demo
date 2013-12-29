@@ -1,10 +1,10 @@
 
-var when = require('when');
+var Q = require('q');
 var dialog = $('#confirm-dialog');
 
 
 function confirmDialog(title) {
-  var confirmation = when.defer();
+  var confirmation = Q.defer();
 
   dialog.one('close', function() {
     dialog.off('click');

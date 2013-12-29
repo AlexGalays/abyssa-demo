@@ -5,7 +5,7 @@ require('./hb');
 require('./router');
 
 
-// *_* @#?!
+// *_* @#?! Don't use these components at home...
 $(document).foundation({
   reveal: {
     animation: 'fade',

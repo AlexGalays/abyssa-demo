@@ -1,10 +1,11 @@
 
 var State        = require('abyssa').State,
+    Async        = require('abyssa').Async,
     mainContent  = require('../dom').mainContent,
     Hb           = require('handlebars'),
-    when         = require('when'),
+    Q            = require('q'),
     Zanimo       = require('zanimo'),
-    spinner      = require('../spinner'),
+    spinner      = require('../spinner')(),
     showTemplate = Hb.compile($('#news-item-template').html()),
     editTemplate = Hb.compile($('#news-item-edit-template').html()),
     cachedNews   = {},
@@ -15,76 +16,66 @@ var State        = require('abyssa').State,
 
 
 var state = State(':id', {
+  enter: enter,
+  exit: exit,
 
-  enter: function(params) {
-    $(document).on('click', onDocumentClick);
-
-    resetPanelContent();
-
-    var panel = when(openPanel()).then(startLoading);
-
-    var newsData = when(getNews(params.id)).then(function(data) {
-      if (!data) {
-        mainContent.text('The news #' + params.id + " does not exist");
-        throw new Error();
-      }
-
-      cachedNews[params.id] = data;
-      return data;
-    });
-
-    news = this.async(when.all([panel, newsData]))
-      .then(function(values) { return values[1]; });
-  },
-
-  exit: function() {
-    $(document).off('click', onDocumentClick);
-
-    var destination = this.router.currentState();
-
-    if (destination.is('news.show'))
-      closePanel();
-    else if (!destination.isIn(this.fullName))
-      closePanel(true);
-  },
-
-  // The show and edit state share a common parent: news.item. This means that each of these states
-  // do not need to fetch the news data again.
-  show: State({
-    enter: function(params) {
-
-      news.done(function(data) {
-        showContent(showTemplate({
-          id: params.id,
-          title: data.title,
-          body: newsBody(data)
-        }));
-
-      });
-
-    }
-  }),
-
-  // The edit state has little work to do when directly coming from news.item or news.item.show
-  edit: State('edit', {
-    enter: function(params) {
-
-      news.done(function(data) {
-        showContent(editTemplate({
-          id: params.id,
-          title: data.title,
-          body: newsBody(data)
-        }));
-
-        $('#news-item-edit').find('textarea').keydown(function(evt) {
-          setTimeout(function() { data.body = evt.target.value; }, 0);
-        });
-      });
-
-    }
-  })
-
+  show: State('', showEnter),
+  edit: State('edit', editEnter)
 });
+
+
+function enter(params) {
+  $(document).on('click', onDocumentClick);
+  $(document).on('keyup', onDocumentKeyup);
+
+  var panel = Q(openPanel()).then(startLoading);
+
+  var newsData = Q(getNews(params.id)).then(function(data) {
+    cachedNews[params.id] = data;
+    return data;
+  });
+
+  news = this.async(Q.all([panel, newsData]))
+    .then(function(values) { return values[1]; });
+}
+
+function exit() {
+  $(document).off('click', onDocumentClick);
+  $(document).off('keyup', onDocumentKeyup);
+
+  var destination = this.router.currentState();
+
+  if (destination.is('news.show'))
+    closePanel();
+  else if (!destination.isIn(this.fullName))
+    closePanel(true);
+  else resetPanelContent();
+}
+
+function showEnter(params) {
+  news.done(function(data) {
+    showContent(showTemplate({
+      id: params.id,
+      title: data.title,
+      body: newsBody(data)
+    }));
+
+  });
+}
+
+function editEnter(params) {
+  news.done(function(data) {
+    showContent(editTemplate({
+      id: params.id,
+      title: data.title,
+      body: newsBody(data)
+    }));
+
+    $('#news-item-edit').find('textarea').keydown(function(evt) {
+      setTimeout(function() { data.body = evt.target.value; }, 0);
+    });
+  });
+}
 
 
 function openPanel() {
@@ -99,21 +90,21 @@ function openPanel() {
 function closePanel(atOnce) {
   panelOpened = false;
 
-  if (atOnce)
-    Zanimo.transform(sidePanel[0], 'translate3d(100%, 0, 0)', true)
-      .then(resetPanelContent);
-  else 
-    Zanimo.transition(sidePanel[0], 'transform', 'translate3d(100%, 0, 0)', 100, 'ease')
-      .then(resetPanelContent);
+  var animation = atOnce 
+    ? Zanimo.transform(sidePanel[0], 'translate3d(100%, 0, 0)', true)
+    : Zanimo.transition(sidePanel[0], 'transform', 'translate3d(100%, 0, 0)', 100, 'ease')
+
+  animation.then(resetPanelContent);
 }
 
 function startLoading() {
-  spinner.spin(panelContent[0]);
+  spinner.show(panelContent[0]);
 }
 
 function showContent(content) {
-  spinner.stop();
-  panelContent.html(content);
+  Async(spinner.hide()).done(function() {
+    panelContent.html(content);
+  });
 }
 
 function onDocumentClick(event) {
@@ -127,6 +118,11 @@ function onDocumentClick(event) {
   if (isOutsidePanel) backToNews();
 }
 
+function onDocumentKeyup(event) {
+  // ESCAPE
+  if (event.keyCode == 27) backToNews();
+}
+
 function backToNews() {
   state.router.backTo('news.show');
 }
@@ -138,15 +134,17 @@ function resetPanelContent() {
 function getNews(id) {
   if (cachedNews[id]) return cachedNews[id];
 
-  var latency = when.defer();
+  var latency = Q.defer();
   setTimeout(function() { latency.resolve(); }, 400);
 
   // Simulate some network latency and load the full list of news then
   // extract the one we're interested in. Errr.
   return latency.promise.then(function() {
-    return $.getJSON('/assets/javascripts/newsData.json');
+    return $.getJSON('/assets/javascripts/newsData.json' + '?rand=' + Math.random());
   }).then(function(data) {
-    return data.items[id - 1];
+    var news = data.items[id - 1];
+    if (!news)  throw new Error('news not found');
+    return news;
   });
 }
 

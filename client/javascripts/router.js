@@ -11,7 +11,7 @@ var router = Router({
 })
 .configure({
   enableLogs: true,
-  interceptAnchorClicks: true,
+  interceptAnchors: true,
   notFound: require('./state/notFound')
 })
 .init();

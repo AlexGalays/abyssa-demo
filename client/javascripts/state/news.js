@@ -1,52 +1,28 @@
 
-var State     = require('abyssa').State,
-    Async     = require('abyssa').Async,
-    when      = require('when'),
-    item      = require('../state/newsItem'),
-    dom       = require('../dom'),
-    spinner   = require('../spinner'),
-    Hb        = require('handlebars');
+var State        = require('abyssa').State,
+    Async        = require('abyssa').Async,
+    Q            = require('q'),
+    ContentState = require('./contentState'),
+    item         = require('../state/newsItem'),
+    dom          = require('../dom'),
+    spinner      = require('../spinner')(),
+    Hb           = require('handlebars');
 
 var controls  = $('#news-controls-template').html(),
     newsList  = Hb.compile($('#news-template').html()),
     cachedNews;
 
+var state = ContentState('news', {
+  data: { title: 'News' },
 
-var state = State('news', {
-  title: 'News',
-
-  // The entire news section is going to have that great red header background.
-  enter: function() {
-    dom.header.addClass('red');
-    dom.mainContent.html('');
-  },
-
-  // We exit the whole news state subtree, clean up.
-  exit: function() {
-    dom.header.removeClass('red');
-    dom.headerControls.empty();
-    cachedNews = null;
-  },
+  enter: enter,
+  exit: exit,
 
   // The default news state, showing a list of all the news.
   show: State('?color', {
 
-    enter: function(params) {
-      prepareDOM(params);
-
-      Async(getNews()).done(function(news) {
-        finishedLoading();
-
-        cachedNews = news;
-
-        // Filter based on the optional query string.
-        var filtered = params.color
-          ? news.items.filter(function(item) { return item.color == params.color; })
-          : news.items;
-
-        renderItems(filtered);
-      });
-    }
+    enter: showEnter,
+    update: showUpdate
 
   }),
 
@@ -57,20 +33,47 @@ var state = State('news', {
 });
 
 
-function prepareDOM(params) {
+function enter() {
+  dom.header.addClass('red');
+}
+
+function exit() {
+  dom.header.removeClass('red');
+  cachedNews = null;
+}
+
+function showEnter() {
   dom.headerControls.html(controls);
+}
 
-  spinner.spin(dom.mainContent[0]);
-
+function showUpdate(params) {
   updateButtonSelection(params);
+
+  startLoading();
+
+  Async(getNews().then(finishedLoading)).done(function(news) {
+
+    cachedNews = news;
+
+    // Filter based on the optional query string.
+    var filtered = params.color
+      ? news.items.filter(function(item) { return item.color == params.color; })
+      : news.items;
+
+    renderItems(filtered);
+  });
 }
 
 function renderItems(items) {
   dom.mainContent.html(newsList(items));
 }
 
-function finishedLoading() {
-  spinner.stop();
+function startLoading() {
+  spinner.show(dom.mainContent[0]);
+}
+
+function finishedLoading(news) {
+  return spinner.hide().then(function() { return news; });
 }
 
 function updateButtonSelection(params) {
@@ -80,14 +83,14 @@ function updateButtonSelection(params) {
 }
 
 function getNews() {
-  if (cachedNews) return cachedNews;
+  if (cachedNews) return Q(cachedNews);
 
   // Simulate some network latency
-  var latency = when.defer();
-  setTimeout(function() { latency.resolve(); }, 200);
+  var latency = Q.defer();
+  setTimeout(function() { latency.resolve(); }, 500 * Math.random());
 
   return latency.promise.then(function() {
-    return $.getJSON('/assets/javascripts/newsData.json');
+    return $.getJSON('/assets/javascripts/newsData.json' + '?rand=' + Math.random());
   });
 }
 
