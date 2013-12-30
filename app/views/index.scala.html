@@ -43,56 +43,15 @@
 
     </body>
 
-    <script id="gallery-template" type="text/template">
-      <div class="fade-in-animation">
-        <img src="http://lorempixel.com/300/200"/>
-        <img src="http://lorempixel.com/200/200"/>
-        <img src="http://lorempixel.com/305/200"/>
-      </div>
-    </script>
-
-    <script id="news-controls-template" type="text/template">
-      <ul class="button-group">
-        <li><a data-nav="mousedown" href="news" class="button secondary all">All</a></li>
-        <li><a data-nav="mousedown" href="news?color=blue" class="button secondary blue">Blues</a></li>
-        <li><a data-nav="mousedown" href="news?color=green" class="button secondary green">Greens</a></li>
-      </ul>
-    </script>
-
-    <script id="news-template" type="text/template">
-      <ul>
-        {{#each this}}
-        <li class="news-entry">
-          <a {{link 'news.item.show' id=id}}>
-            <div>
-              <div class="color {{ color }}"></div>
-              <h4>{{ title }}</h4>
-            </div>
-          </a>
-        </li>
-        {{/each}}
-      </ul>
-    </script>
-
-    <script id="news-item-template" type="text/template">
-      <div id="news-item">
-        <h1>{{ title }}</h1>
-        <a class="button secondary" {{link 'news.item.edit' id=id}}>Edit</a>
-        <div><pre>{{ body }}</pre></div>
-      </div>
-    </script>
-
-    <script id="news-item-edit-template" type="text/template">
-      <div id="news-item-edit">
-        <h1>{{ title }}</h1>
-        <a class="button secondary" {{link 'news.item.show' id=id}}>Show</a>
-        <textarea>{{ body }}</textarea>
-      </div>
-    </script>
+    <!--[if lt IE 10]>
+      <script src="/assets/javascripts/lib/es5-shim.js"></script>
+      <script src="/assets/javascripts/lib/history.js"></script>
+    <![endif]-->
 
     <script src="/assets/javascripts/lib/jquery.js"></script>
     <script src="/assets/javascripts/lib/foundation.js"></script>
     <script src="/assets/javascripts/lib/foundation.reveal.js"></script>
+
     <script src="/assets/javascripts/app.js"></script>
 
 </html>

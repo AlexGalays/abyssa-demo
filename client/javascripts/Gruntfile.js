@@ -4,7 +4,17 @@ module.exports = function(grunt) {
     browserify: {
       build: {
         files: {'../../public/javascripts/app.js': ['main.js']},
-        options: { debug: true }
+        options: {
+          debug: false,
+          transform: ['hbsfy']
+        }
+      }
+    },
+
+    uglify: {
+      build: {
+        src: '../../public/javascripts/app.js',
+        dest: '../../public/javascripts/app.js'
       }
     },
 
@@ -19,7 +29,8 @@ module.exports = function(grunt) {
 
   grunt.loadNpmTasks('grunt-contrib-watch');
   grunt.loadNpmTasks('grunt-browserify');
+  grunt.loadNpmTasks('grunt-contrib-uglify');
 
-  grunt.registerTask('default', ['browserify']);
+  grunt.registerTask('default', ['browserify', 'uglify']);
   grunt.registerTask('dev', ['default', 'watch']);
 };

@@ -1,6 +1,4 @@
 
-require('es5-shim');
-
 require('./hb');
 require('./router');
 

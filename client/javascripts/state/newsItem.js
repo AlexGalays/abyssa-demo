@@ -2,12 +2,11 @@
 var State        = require('abyssa').State,
     Async        = require('abyssa').Async,
     mainContent  = require('../dom').mainContent,
-    Hb           = require('handlebars'),
     Q            = require('q'),
     Zanimo       = require('zanimo'),
     spinner      = require('../spinner')(),
-    showTemplate = Hb.compile($('#news-item-template').html()),
-    editTemplate = Hb.compile($('#news-item-edit-template').html()),
+    showTemplate = require('../template/newsItem.hbs'),
+    editTemplate = require('../template/newsItemEdit.hbs'),
     cachedNews   = {},
     sidePanel    = $('#side-panel'),
     panelContent = $('#side-panel-content'),
@@ -20,7 +19,10 @@ var state = State(':id', {
   exit: exit,
 
   show: State('', showEnter),
-  edit: State('edit', editEnter)
+  edit: State('edit', {
+    enter: editEnter,
+    exit: editExit
+  })
 });
 
 
@@ -59,24 +61,33 @@ function showEnter(params) {
       title: data.title,
       body: newsBody(data)
     }));
-
   });
 }
 
 function editEnter(params) {
-  news.done(function(data) {
+  news.done(showEditMode);
+
+  function showEditMode(data) {
     showContent(editTemplate({
       id: params.id,
       title: data.title,
       body: newsBody(data)
-    }));
-
-    $('#news-item-edit').find('textarea').keydown(function(evt) {
-      setTimeout(function() { data.body = evt.target.value; }, 0);
-    });
-  });
+    }))
+    .done(editOnKeyUp(data));
+  }
 }
 
+function editExit() {
+  $('#news-item-edit').find('textarea').off('keyup');
+}
+
+function editOnKeyUp(data) {
+  return function() {
+    $('#news-item-edit').find('textarea').keyup(function(evt) {
+      data.body = evt.target.value;
+    });
+  };
+}
 
 function openPanel() {
   if (panelOpened)
@@ -102,7 +113,7 @@ function startLoading() {
 }
 
 function showContent(content) {
-  Async(spinner.hide()).done(function() {
+  return Async(spinner.hide()).then(function() {
     panelContent.html(content);
   });
 }

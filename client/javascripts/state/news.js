@@ -6,11 +6,10 @@ var State        = require('abyssa').State,
     item         = require('../state/newsItem'),
     dom          = require('../dom'),
     spinner      = require('../spinner')(),
-    Hb           = require('handlebars');
+    controls     = require('../template/newsControls.hbs'),
+    newsList     = require('../template/news.hbs');
 
-var controls  = $('#news-controls-template').html(),
-    newsList  = Hb.compile($('#news-template').html()),
-    cachedNews;
+var cachedNews;
 
 var state = ContentState('news', {
   data: { title: 'News' },

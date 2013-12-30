@@ -1,8 +1,8 @@
 
-var router = require('./router'),
-    Hb     = require('handlebars');
+var router     = require('./router'),
+    Handlebars = require("hbsfy/runtime");
 
 
-Hb.registerHelper('link', function(state, options) {
-  return new Hb.SafeString('href="' + router.link(state, options.hash) + '"');
+Handlebars.registerHelper('link', function(state, options) {
+  return new Handlebars.SafeString('href="' + router.link(state, options.hash) + '"');
 });

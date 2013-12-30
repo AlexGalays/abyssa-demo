@@ -1,0 +1,12 @@
+<ul>
+  {{#each this}}
+  <li class="news-entry">
+    <a {{link 'news.item.show' id=id}}>
+      <div>
+        <div class="color {{ color }}"></div>
+        <h4>{{ title }}</h4>
+      </div>
+    </a>
+  </li>
+  {{/each}}
+</ul>

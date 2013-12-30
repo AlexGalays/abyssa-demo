@@ -2,7 +2,7 @@
 var ContentState  = require('./contentState'),
     mainContent   = require('../dom').mainContent,
     confirmDialog = require('../confirmDialog'),
-    template      = $('#gallery-template').html();
+    template      = require('../template/gallery.hbs');
 
 
 module.exports = ContentState('gallery', {
