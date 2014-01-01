@@ -50,15 +50,15 @@ function showUpdate(params) {
 
   startLoading();
 
-  Async(getNews().then(finishedLoading)).done(function(news) {
+  Async(getNews().then(finishedLoading)).done(news => {
 
     cachedNews = news;
 
     // Filter based on the optional query string.
     var filtered = params.color
-      ? news.items.filter(function(item) { return item.color == params.color; })
+      ? news.items.filter(item => item.color == params.color)
       : news.items;
-
+  
     renderItems(filtered);
   });
 }
@@ -72,7 +72,7 @@ function startLoading() {
 }
 
 function finishedLoading(news) {
-  return spinner.hide().then(function() { return news; });
+  return spinner.hide().then(_ => news);
 }
 
 function updateButtonSelection(params) {
@@ -86,11 +86,11 @@ function getNews() {
 
   // Simulate some network latency
   var latency = Q.defer();
-  setTimeout(function() { latency.resolve(); }, 500 * Math.random());
+  setTimeout(_ => latency.resolve(), 500 * Math.random());
 
-  return latency.promise.then(function() {
-    return $.getJSON('/assets/javascripts/newsData.json' + '?rand=' + Math.random());
-  });
+  return latency.promise.then(_ =>
+    $.getJSON('/assets/javascripts/newsData.json' + '?rand=' + Math.random())
+  );
 }
 
 

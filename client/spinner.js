@@ -27,7 +27,7 @@ function makeSpinner() {
     hideDelay = null;
 
     showDelay = Q.defer();
-    setTimeout(function() {
+    setTimeout(_ => {
       if (showDelay) showDelay.resolve(el);
       showDelay = null;
     }, SHOW_DELAY);
@@ -49,7 +49,7 @@ function makeSpinner() {
     var delay = Math.max(0, HIDE_DELAY - timeElapsed);
 
     hideDelay = Q.defer();
-    setTimeout(function() {
+    setTimeout(_ => {
       if (hideDelay) hideDelay.resolve();
       hideDelay = null;
     }, delay);
@@ -62,7 +62,7 @@ function makeSpinner() {
   }
 
   return {
-    el:   function() { return spinner.el; },
+    el:   () => spinner.el,
     show: show,
     hide: hide
   };

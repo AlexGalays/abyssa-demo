@@ -32,13 +32,13 @@ function enter(params) {
 
   var panel = Q(openPanel()).then(startLoading);
 
-  var newsData = Q(getNews(params.id)).then(function(data) {
+  var newsData = Q(getNews(params.id)).then(data => {
     cachedNews[params.id] = data;
     return data;
   });
 
   news = this.async(Q.all([panel, newsData]))
-    .then(function(values) { return values[1]; });
+    .then(values => values[1]);
 }
 
 function exit() {
@@ -55,12 +55,14 @@ function exit() {
 }
 
 function showEnter(params) {
-  news.done(function(data) {
+  news.done(data => {
+
     showContent(showTemplate({
       id: params.id,
       title: data.title,
       body: newsBody(data)
     }));
+
   });
 }
 
@@ -83,7 +85,7 @@ function editExit() {
 
 function editOnKeyUp(data) {
   return function() {
-    $('#news-item-edit').find('textarea').keyup(function(evt) {
+    $('#news-item-edit').find('textarea').keyup(evt => {
       data.body = evt.target.value;
     });
   };
@@ -113,9 +115,9 @@ function startLoading() {
 }
 
 function showContent(content) {
-  return Async(spinner.hide()).then(function() {
-    panelContent.html(content);
-  });
+  return Async(spinner.hide()).then(_ =>
+    panelContent.html(content)
+  );
 }
 
 function onDocumentClick(event) {
@@ -146,13 +148,13 @@ function getNews(id) {
   if (cachedNews[id]) return cachedNews[id];
 
   var latency = Q.defer();
-  setTimeout(function() { latency.resolve(); }, 400);
+  setTimeout(_ => latency.resolve(), 400);
 
   // Simulate some network latency and load the full list of news then
   // extract the one we're interested in. Errr.
-  return latency.promise.then(function() {
-    return $.getJSON('/assets/javascripts/newsData.json' + '?rand=' + Math.random());
-  }).then(function(data) {
+  return latency.promise.then(_ =>
+    $.getJSON('/assets/javascripts/newsData.json' + '?rand=' + Math.random())
+  ).then(data => {
     var news = data.items[id - 1];
     if (!news)  throw new Error('news not found');
     return news;

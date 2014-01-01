@@ -54,4 +54,8 @@
 
     <script src="/assets/javascripts/app.js"></script>
 
+    @if(play.api.Play.isDev(play.api.Play.current)) {
+      <script src="//localhost:35729/livereload.js"></script>
+    }
+
 </html>
