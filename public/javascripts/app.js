@@ -1148,13 +1148,12 @@ if (typeof define === 'function' && define.amd) {
 'use strict';
 
 
-var Signal = require('signals').Signal,
-    crossroads = require('crossroads'),
-
+var Signal           = require('signals').Signal,
+    crossroads       = require('crossroads'),
     interceptAnchors = require('./anchors'),
-    StateWithParams = require('./StateWithParams'),
-    Transition = require('./Transition'),
-    util = require('./util');
+    StateWithParams  = require('./StateWithParams'),
+    Transition       = require('./Transition'),
+    util             = require('./util');
 
 /*
 * Create a new Router instance, passing any state defined declaratively.
@@ -1168,18 +1167,20 @@ function Router(declarativeStates) {
       states = util.copyObject(declarativeStates),
       roads  = crossroads.create(),
       firstTransition = true,
-      initOptions = {
+      options = {
         enableLogs: false,
-        interceptAnchors: true
+        interceptAnchors: true,
+        notFound: null,
+        urlSync: true
       },
-      ignoreNextPopState = false,
+      ignoreNextURLChange = false,
       currentPathQuery,
       currentState,
       previousState,
       transition,
       leafStates,
       stateFound,
-      poppedState,
+      urlChanged,
       initialized;
 
   // Routes params should be type casted. e.g the dynamic path items/:id when id is 33
@@ -1194,7 +1195,7 @@ function Router(declarativeStates) {
   * A failed transition will leave the router in its current state.
   */
   function setState(state, params, reload) {
-    if (!reload && isSameState(state, params)) return;
+    if (!reload && isSameState(state, params)) return transitionPrevented(currentState);
 
     var fromState, oldPreviousState;
     var toState = StateWithParams(state, params, currentPathQuery);
@@ -1208,15 +1209,14 @@ function Router(declarativeStates) {
     }
 
     // While the transition is running, any code asking the router about the previous/current state should
-    // get the end result state. These states are rollbacked if the transition fails.
-    oldPreviousState = previousState;
+    // get the end result state.
     previousState = currentState;
     currentState = toState;
 
-    // A state was popped and the browser already changed the URL as a result;
-    // Revert the URL to its previous value and actually change it after a successful transition.
-    if (poppedState) replaceState(
-      fromState.pathQuery, document.title, fromState.pathQuery);
+    if (!urlChanged && !firstTransition && !reload) {
+      log('Updating URL: {0}', currentPathQuery);
+      updateURLFromState(currentPathQuery, document.title, currentPathQuery);
+    }
 
     startingTransition(fromState, toState);
 
@@ -1229,27 +1229,19 @@ function Router(declarativeStates) {
     transition.then(
       function success() {
         transition = null;
-
-        if (!poppedState && !firstTransition && !reload) {
-          log('Pushing state: {0}', currentPathQuery);
-          pushState(currentPathQuery, document.title, currentPathQuery);
-        }
-
-        if (poppedState) replaceState(
-          currentState.pathQuery, document.title, currentState.pathQuery);
-
         transitionCompleted(fromState, toState);
       },
       function fail(error) {
+        currentState = transition.currentState;
         transition = null;
-
-        currentState = previousState;
-        previousState = oldPreviousState;
-
         transitionFailed(fromState, toState, error);
       }
     )
     .fail(transitionError);
+  }
+
+  function transitionPrevented(toState) {
+    router.transition.prevented.dispatch(toState);
   }
 
   function cancelTransition() {
@@ -1273,7 +1265,7 @@ function Router(declarativeStates) {
 
     firstTransition = false;
 
-    toState._state.lastParams = toState.params;
+    toState.state.lastParams = toState.params;
 
     router.transition.completed.dispatch(toState, fromState);
   }
@@ -1294,16 +1286,17 @@ function Router(declarativeStates) {
     setTimeout(function() { throw error; }, 0);
   }
 
-  // Workaround for https://github.com/devote/HTML5-History-API/issues/44
-  function replaceState(state, title, url) {
-    if (history.emulate) ignoreNextPopState = true;
-    history.replaceState(state, title, url);
-  }
+  function updateURLFromState(state, title, url) {
+    if (!options.urlSync) return;
 
-  // Workaround for https://github.com/devote/HTML5-History-API/issues/44
-  function pushState(state, title, url) {
-    if (history.emulate) ignoreNextPopState = true;
-    history.pushState(state, title, url);
+    // The first check is a workaround for https://github.com/devote/HTML5-History-API/issues/44
+    if (history.emulate || isHashMode())
+      ignoreNextURLChange = true;
+
+    if (isHashMode())
+      location.hash = url;
+    else
+      history.pushState(state, title, url);
   }
 
   /*
@@ -1311,20 +1304,10 @@ function Router(declarativeStates) {
   * in which case the router can ignore the change.
   */
   function isSameState(newState, newParams) {
-    var state, params, diff;
+    if (!currentState) return false;
 
-    if (transition) {
-      state = transition.to;
-      params = transition.toParams;
-    }
-    else if (currentState) {
-      state = currentState._state;
-      params = currentState.params;
-    }
-
-    diff = paramDiff(params, newParams);
-
-    return (newState == state) && (util.objectSize(diff) == 0);
+    var diff = paramDiff(currentState.params, newParams);
+    return (newState == currentState.state) && (util.objectSize(diff) == 0);
   }
 
   /*
@@ -1350,7 +1333,8 @@ function Router(declarativeStates) {
   function notFound(state) {
     log('State not found: {0}', state);
 
-    if (initOptions.notFound) setState(initOptions.notFound);
+    if (options.notFound)
+      setState(leafStates[options.notFound] || options.notFound, {});
     else throw new Error ('State "' + state + '" could not be found');
   }
 
@@ -1360,9 +1344,10 @@ function Router(declarativeStates) {
   *   enableLogs: Whether (debug and error) console logs should be enabled. Defaults to false.
   *   interceptAnchors: Whether anchor mousedown/clicks should be intercepted and trigger a state change. Defaults to true.
   *   notFound: The State to enter when no state matching the current path query or name could be found. Defaults to null.
+  *   urlSync: Whether the router should maintain the current state and the url in sync. Defaults to true.
   */
-  function configure(options) {
-    util.mergeObjects(initOptions, options);
+  function configure(withOptions) {
+    util.mergeObjects(options, withOptions);
     return router;
   }
 
@@ -1373,37 +1358,60 @@ function Router(declarativeStates) {
   * 2) The state captured by the current URL
   */
   function init(initState, initParams) {
-    if (initOptions.enableLogs)
+    if (options.enableLogs)
       Router.enableLogs();
 
-    if (initOptions.interceptAnchors)
+    if (options.interceptAnchors)
       interceptAnchors(router);
 
     log('Router init');
-    initStates();
 
-    initState = (initState !== undefined) ? initState : urlPathQuery();
+    initStates();
+    logStateTree();
+
+    initState = (initState !== undefined) ? initState : getInitState();
 
     log('Initializing to state {0}', initState || '""');
     state(initState, initParams);
 
-    window.onpopstate = function(evt) {
-      if (ignoreNextPopState) {
-        ignoreNextPopState = false;
+    listenToURLChanges();
+
+    initialized = true;
+    return router;
+  }
+
+  /*
+  * Remove any possibility of side effect this router instance might cause.
+  * Used for testing purposes.
+  */
+  function terminate() {
+    window.onhashchange = null;
+    window.onpopstate = null;
+  }
+
+  function listenToURLChanges() {
+    if (!options.urlSync) return;
+
+    function onURLChange(evt) {
+      if (ignoreNextURLChange) {
+        ignoreNextURLChange = false;
         return;
       }
 
       // history.js will dispatch fake popstate events on HTML4 browsers' hash changes; 
-      // in these cases, evt.state is null.
-      var newState = evt.state || urlPathQuery();
+      // in this case, evt.state is null.
+      var newState = isHashMode() ? urlPathQuery() : evt.state || urlPathQuery();
 
-      log('Popped state: {0}', newState);
-      poppedState = true;
+      log('URL changed: {0}', newState);
+      urlChanged = true;
       setStateForPathQuery(newState);
-    };
+    }
 
-    initialized = true;
-    return router;
+    window[isHashMode() ? 'onhashchange' : 'onpopstate'] = onURLChange;
+  }
+
+  function getInitState() {
+    return options.urlSync ? urlPathQuery() : '';
   }
 
   function initStates() {
@@ -1411,8 +1419,8 @@ function Router(declarativeStates) {
       state.init(router, name);
     });
 
-    if (initOptions.notFound)
-      initOptions.notFound.init('notFound');
+    if (options.notFound && options.notFound.init)
+      options.notFound.init('notFound');
 
     leafStates = {};
 
@@ -1459,7 +1467,7 @@ function Router(declarativeStates) {
 
     log('Changing state to {0}', pathQueryOrName || '""');
 
-    poppedState = false;
+    urlChanged = false;
     if (isName) setStateByName(pathQueryOrName, params || {});
     else setStateForPathQuery(pathQueryOrName);
   }
@@ -1488,7 +1496,7 @@ function Router(declarativeStates) {
   * and the current state should update because of it.
   */
   function reload() {
-    setState(currentState._state, currentState.params, true);
+    setState(currentState.state, currentState.params, true);
   }
 
   function setStateForPathQuery(pathQuery) {
@@ -1519,8 +1527,6 @@ function Router(declarativeStates) {
     if (states[name])
       throw new Error('A state already exist in the router with the name ' + name);
 
-    log('Adding state {0}', name);
-
     states[name] = state;
 
     return router;
@@ -1533,6 +1539,10 @@ function Router(declarativeStates) {
       : (location.pathname + location.search).slice(1);
 
     return util.normalizePathQuery(pathQuery);
+  }
+
+  function isHashMode() {
+    return (options.urlSync == 'hash');
   }
 
   /*
@@ -1613,6 +1623,30 @@ function Router(declarativeStates) {
     return previousState;
   }
 
+  function logStateTree() {
+    if (!logEnabled) return;
+
+    var indent = function(level) {
+      if (level == 0) return '';
+      return new Array(2 + (level - 1) * 4).join(' ') + '── ';
+    }
+
+    var stateTree = function(state) {
+      var path = util.normalizePathQuery(state.fullPath());
+      var pathStr = (state.children.length == 0)
+        ? ' (@ path)'.replace('path', path)
+        : '';
+      var str = indent(state.parents.length) + state.name + pathStr + '\n';
+      return str + state.children.map(stateTree).join('');
+    }
+
+    var msg = '\nState tree\n\n';
+    msg += util.objectToArray(states).map(stateTree).join('');
+    msg += '\n';
+
+    log(msg);
+  }
+
 
   // Public methods
 
@@ -1627,6 +1661,7 @@ function Router(declarativeStates) {
   router.currentState = getCurrentState;
   router.previousState = getPreviousState;
   router.urlPathQuery = urlPathQuery;
+  router.terminate = terminate;
 
 
   // Signals
@@ -1641,18 +1676,13 @@ function Router(declarativeStates) {
     // Dispatched when a transition failed to complete
     failed:    new Signal(),
     // Dispatched when a transition got cancelled
-    cancelled: new Signal()
+    cancelled: new Signal(),
+    // Dispatched when a transition was prevented by the router
+    prevented: new Signal()
   };
-
-  // Dispatched once after the router successfully reached its initial state.
-  router.initialized = new Signal();
 
   // Shorter alias for transition.completed: The most commonly used signal
   router.changed = router.transition.completed;
-
-  router.transition.completed.addOnce(function() {
-    router.initialized.dispatch();
-  });
 
   router.transition.completed.add(transitionEnded);
   router.transition.failed.add(transitionEnded);
@@ -1669,9 +1699,12 @@ function Router(declarativeStates) {
 // Logging
 
 var log = util.noop,
-    logError = util.noop;
+    logError = util.noop,
+    logEnabled;
 
 Router.enableLogs = function() {
+  logEnabled = true;
+
   log = function() {
     var message = util.makeMessage.apply(null, arguments);
     console.log(message);
@@ -1681,6 +1714,7 @@ Router.enableLogs = function() {
     var message = util.makeMessage.apply(null, arguments);
     console.error(message);
   };
+
 };
 
 
@@ -1690,7 +1724,7 @@ module.exports = Router;
 'use strict';
 
 
-var util = require('./util');
+var util  = require('./util');
 var async = require('./Transition').asyncPromises.register;
 
 /*
@@ -1934,30 +1968,22 @@ module.exports = State;
 */
 function StateWithParams(state, params, pathQuery) {
   return {
-    _state: state,
+    state: state,
     name: state && state.name,
     fullName: state && state.fullName,
     pathQuery: pathQuery,
     data: state && state.data,
     params: params,
-    is: is,
     isIn: isIn,
     toString: toString
   };
 }
 
 /*
-* Returns whether this state has the given fullName.
-*/
-function is(fullStateName) {
-  return this.fullName == fullStateName;
-}
-
-/*
 * Returns whether this state or any of its parents has the given fullName.
 */
 function isIn(fullStateName) {
-  var current = this._state;
+  var current = this.state;
   while (current) {
     if (current.fullName == fullStateName) return true;
     current = current.parent;
@@ -1976,7 +2002,7 @@ module.exports = StateWithParams;
 'use strict';
 
 
-var Q = require('q'),
+var Q    = require('q'),
     util = require('./util');
 
 /*
@@ -1990,8 +2016,8 @@ function Transition(fromStateWithParams, toStateWithParams, paramDiff, reload) {
       error,
       exits = [];
 
-  var fromState = fromStateWithParams && fromStateWithParams._state;
-  var toState = toStateWithParams._state;
+  var fromState = fromStateWithParams && fromStateWithParams.state;
+  var toState = toStateWithParams.state;
   var params = toStateWithParams.params;
   var isUpdate = (fromState == toState);
 
@@ -2013,7 +2039,7 @@ function Transition(fromStateWithParams, toStateWithParams, paramDiff, reload) {
 
   enters = transitionStates(toState, root, isUpdate).reverse();
 
-  transitionPromise = prereqs(enters, exits, params, isUpdate).then(function() {
+  transitionPromise = prereqs(enters, params, isUpdate).then(function() {
     if (!cancelled) doTransition(enters, exits, params, transition, isUpdate);
   });
 
@@ -2036,22 +2062,7 @@ function Transition(fromStateWithParams, toStateWithParams, paramDiff, reload) {
 /*
 * Return the promise of the prerequisites for all the states involved in the transition.
 */
-function prereqs(enters, exits, params, isUpdate) {
-
-  exits.forEach(function(state) {
-    if (!state.exitPrereqs || (isUpdate && state.update)) return;
-
-    var prereqs = state._exitPrereqs = Q(state.exitPrereqs()).then(
-      function success(value) {
-        if (state._exitPrereqs == prereqs) state._exitPrereqs.value = value;
-      },
-      function fail(cause) {
-        var message = util.makeMessage('Failed to resolve EXIT prereqs of "{0}"', state.fullName);
-        throw TransitionError(message, cause);
-      }
-    );
-  });
-
+function prereqs(enters, params, isUpdate) {
   enters.forEach(function(state) {
     if (!state.enterPrereqs || (isUpdate && state.update)) return;
 
@@ -2066,8 +2077,8 @@ function prereqs(enters, exits, params, isUpdate) {
     );
   });
 
-  return Q.all(enters.concat(exits).map(function(state) {
-    return state._enterPrereqs || state._exitPrereqs;
+  return Q.all(enters.map(function(state) {
+    return state._enterPrereqs;
   }));
 }
 
@@ -2235,10 +2246,14 @@ function hrefForEvent(evt) {
   var anchor = anchorTarget(target);
   if (!anchor) return;
 
-  if (evt.type == 'mousedown' && anchor.getAttribute('data-nav') != 'mousedown') return;
+  var dataNav = anchor.getAttribute('data-nav');
+
+  if (dataNav == 'ignore') return;
+  if (evt.type == 'mousedown' && dataNav != 'mousedown') return;
 
   var href = anchor.getAttribute('href');
 
+  if (!href) return;
   if (href.charAt(0) == '#') return;
   if (anchor.getAttribute('target') == '_blank') return;
   if (!isLocalLink(anchor)) return;
@@ -2293,6 +2308,7 @@ module.exports = function interceptAnchors(forRouter) {
 },{}],8:[function(require,module,exports){
 
 'use strict';
+
 
 var Abyssa = {
   Router: require('./Router'),
@@ -5397,39 +5413,6 @@ return Q;
 module.exports=require(15)
 },{"__browserify_process":10}],19:[function(require,module,exports){
 
-var Q = require('q');
-var dialog = $('#confirm-dialog');
-
-
-function confirmDialog(title) {
-  var confirmation = Q.defer();
-
-  dialog.one('close', function() {
-    dialog.off('click');
-    confirmation.reject('Did not confirm');
-  });
-
-  dialog.foundation('reveal', 'open')
-    .find('h2').text(title).end()
-    .one('click', 'button', function(event) {
-      var button = $(event.target);
-
-      dialog.off('close');
-      dialog.foundation('reveal', 'close');
-
-      setTimeout(function(_) {
-        button.is('.confirm-yes') ? confirmation.resolve() : confirmation.reject('Did not confirm');
-      }, 200);
-
-    });
-
-  return confirmation.promise;
-}
-
-
-module.exports = confirmDialog;
-},{"q":15}],20:[function(require,module,exports){
-
 module.exports = {
   contentParent:  $('section'),
   mainContent:    $('#main-content'),
@@ -5438,7 +5421,7 @@ module.exports = {
   sectionTitle:   $('header h1'),
   body:           $('body')
 };
-},{}],21:[function(require,module,exports){
+},{}],20:[function(require,module,exports){
 
 var router     = require('./router'),
     Handlebars = require("hbsfy/runtime");
@@ -5447,20 +5430,11 @@ var router     = require('./router'),
 Handlebars.registerHelper('link', function(state, options) {
   return new Handlebars.SafeString('href="' + router.link(state, options.hash) + '"');
 });
-},{"./router":23,"hbsfy/runtime":14}],22:[function(require,module,exports){
+},{"./router":22,"hbsfy/runtime":14}],21:[function(require,module,exports){
 
 require('./hb');
 require('./router');
-
-
-// *_* @#?! Don't use these components at home...
-$(document).foundation({
-  reveal: {
-    animation: 'fade',
-    animation_speed: 100
-  }
-});
-},{"./hb":21,"./router":23}],23:[function(require,module,exports){
+},{"./hb":20,"./router":22}],22:[function(require,module,exports){
 
 var Router         = require('abyssa').Router,
     dom            = require('./dom'),
@@ -5492,7 +5466,7 @@ router.transition.completed.add(function(newState) {
 
 
 module.exports = router;
-},{"./dom":20,"./state/gallery":26,"./state/index":27,"./state/news":28,"./state/notFound":30,"abyssa":8}],24:[function(require,module,exports){
+},{"./dom":19,"./state/gallery":25,"./state/index":26,"./state/news":27,"./state/notFound":29,"abyssa":8}],23:[function(require,module,exports){
 var Q       = require('q'),
     Spinner = require('spin.js');
 
@@ -5568,7 +5542,7 @@ function makeSpinner() {
 
 
 module.exports = makeSpinner;
-},{"q":15,"spin.js":16}],25:[function(require,module,exports){
+},{"q":15,"spin.js":16}],24:[function(require,module,exports){
 
 var State = require('abyssa').State,
     dom   = require('../dom');
@@ -5595,11 +5569,10 @@ function onContentExit(state) {
 
 
 module.exports = ContentState;
-},{"../dom":20,"abyssa":8}],26:[function(require,module,exports){
+},{"../dom":19,"abyssa":8}],25:[function(require,module,exports){
 
 var ContentState  = require('./contentState'),
     mainContent   = require('../dom').mainContent,
-    confirmDialog = require('../confirmDialog'),
     template      = require('../template/gallery.hbs');
 
 
@@ -5608,14 +5581,10 @@ module.exports = ContentState('gallery', {
   
   enter: function() {
     mainContent.html(template);
-  },
-
-  exitPrereqs: function() {
-    return confirmDialog('Are you sure?');
   }
 
 });
-},{"../confirmDialog":19,"../dom":20,"../template/gallery.hbs":31,"./contentState":25}],27:[function(require,module,exports){
+},{"../dom":19,"../template/gallery.hbs":30,"./contentState":24}],26:[function(require,module,exports){
 
 var ContentState = require('./contentState'),
     mainContent  = require('../dom').mainContent;
@@ -5628,7 +5597,7 @@ module.exports = ContentState('', {
     mainContent.text('This is the index. Check "News" for an example of nested states');
   }
 });
-},{"../dom":20,"./contentState":25}],28:[function(require,module,exports){
+},{"../dom":19,"./contentState":24}],27:[function(require,module,exports){
 
 var State        = require('abyssa').State,
     Async        = require('abyssa').Async,
@@ -5732,7 +5701,7 @@ function getNews() {
 
 
 module.exports = state;
-},{"../dom":20,"../spinner":24,"../state/newsItem":29,"../template/news.hbs":32,"../template/newsControls.hbs":33,"./contentState":25,"abyssa":8,"q":15}],29:[function(require,module,exports){
+},{"../dom":19,"../spinner":23,"../state/newsItem":28,"../template/news.hbs":31,"../template/newsControls.hbs":32,"./contentState":24,"abyssa":8,"q":15}],28:[function(require,module,exports){
 
 var State        = require('abyssa').State,
     Async        = require('abyssa').Async,
@@ -5784,7 +5753,7 @@ function exit() {
 
   var destination = this.router.currentState();
 
-  if (destination.is('news.show'))
+  if (destination.fullName == 'news.show')
     closePanel();
   else if (!destination.isIn(this.fullName))
     closePanel(true);
@@ -5907,7 +5876,7 @@ function newsBody(news) {
 
 
 module.exports = state;
-},{"../dom":20,"../spinner":24,"../template/newsItem.hbs":34,"../template/newsItemEdit.hbs":35,"abyssa":8,"q":15,"zanimo":17}],30:[function(require,module,exports){
+},{"../dom":19,"../spinner":23,"../template/newsItem.hbs":33,"../template/newsItemEdit.hbs":34,"abyssa":8,"q":15,"zanimo":17}],29:[function(require,module,exports){
 
 var ContentState = require('./contentState'),
     mainContent  = require('../dom').mainContent;
@@ -5920,7 +5889,7 @@ module.exports = ContentState('notFound', {
   }
 
 });
-},{"../dom":20,"./contentState":25}],31:[function(require,module,exports){
+},{"../dom":19,"./contentState":24}],30:[function(require,module,exports){
 // hbsfy compiled Handlebars template
 var Handlebars = require('hbsfy/runtime');
 module.exports = Handlebars.template(function (Handlebars,depth0,helpers,partials,data) {
@@ -5932,7 +5901,7 @@ helpers = this.merge(helpers, Handlebars.helpers); data = data || {};
   return "<div class=\"fade-in-animation\">\r\n  <img src=\"http://lorempixel.com/300/200\"/>\r\n  <img src=\"http://lorempixel.com/200/200\"/>\r\n  <img src=\"http://lorempixel.com/305/200\"/>\r\n</div>";
   });
 
-},{"hbsfy/runtime":14}],32:[function(require,module,exports){
+},{"hbsfy/runtime":14}],31:[function(require,module,exports){
 // hbsfy compiled Handlebars template
 var Handlebars = require('hbsfy/runtime');
 module.exports = Handlebars.template(function (Handlebars,depth0,helpers,partials,data) {
@@ -5967,7 +5936,7 @@ function program1(depth0,data) {
   return buffer;
   });
 
-},{"hbsfy/runtime":14}],33:[function(require,module,exports){
+},{"hbsfy/runtime":14}],32:[function(require,module,exports){
 // hbsfy compiled Handlebars template
 var Handlebars = require('hbsfy/runtime');
 module.exports = Handlebars.template(function (Handlebars,depth0,helpers,partials,data) {
@@ -5979,7 +5948,7 @@ helpers = this.merge(helpers, Handlebars.helpers); data = data || {};
   return "<ul class=\"button-group\">\r\n  <li><a data-nav=\"mousedown\" href=\"news\" class=\"button secondary all\">All</a></li>\r\n  <li><a data-nav=\"mousedown\" href=\"news?color=blue\" class=\"button secondary blue\">Blues</a></li>\r\n  <li><a data-nav=\"mousedown\" href=\"news?color=green\" class=\"button secondary green\">Greens</a></li>\r\n</ul>";
   });
 
-},{"hbsfy/runtime":14}],34:[function(require,module,exports){
+},{"hbsfy/runtime":14}],33:[function(require,module,exports){
 // hbsfy compiled Handlebars template
 var Handlebars = require('hbsfy/runtime');
 module.exports = Handlebars.template(function (Handlebars,depth0,helpers,partials,data) {
@@ -6005,7 +5974,7 @@ helpers = this.merge(helpers, Handlebars.helpers); data = data || {};
   return buffer;
   });
 
-},{"hbsfy/runtime":14}],35:[function(require,module,exports){
+},{"hbsfy/runtime":14}],34:[function(require,module,exports){
 // hbsfy compiled Handlebars template
 var Handlebars = require('hbsfy/runtime');
 module.exports = Handlebars.template(function (Handlebars,depth0,helpers,partials,data) {
@@ -6031,5 +6000,5 @@ helpers = this.merge(helpers, Handlebars.helpers); data = data || {};
   return buffer;
   });
 
-},{"hbsfy/runtime":14}]},{},[22])
+},{"hbsfy/runtime":14}]},{},[21])
 ;

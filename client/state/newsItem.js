@@ -47,7 +47,7 @@ function exit() {
 
   var destination = this.router.currentState();
 
-  if (destination.is('news.show'))
+  if (destination.fullName == 'news.show')
     closePanel();
   else if (!destination.isIn(this.fullName))
     closePanel(true);

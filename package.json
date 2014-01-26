@@ -24,7 +24,7 @@
     ],
     "dependencies": {
         "q":                     "~0.9.7",
-        "abyssa":                "~4.0.0",
+        "abyssa":                "~5.0.0",
         "handlebars":            "~1.0.12",
         "es5-shim":              "~2.1.0",
         "zanimo":                "~0.0.9",
