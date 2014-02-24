@@ -41,8 +41,9 @@ function exit() {
   cachedNews = null;
 }
 
-function showEnter() {
+function showEnter(params) {
   dom.headerControls.html(controls);
+  showUpdate(params);
 }
 
 function showUpdate(params) {

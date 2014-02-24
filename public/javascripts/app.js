@@ -1150,6 +1150,7 @@ if (typeof define === 'function' && define.amd) {
 
 var Signal           = require('signals').Signal,
     crossroads       = require('crossroads'),
+    Q                = require('q'),
     interceptAnchors = require('./anchors'),
     StateWithParams  = require('./StateWithParams'),
     Transition       = require('./Transition'),
@@ -1179,7 +1180,6 @@ function Router(declarativeStates) {
       previousState,
       transition,
       leafStates,
-      stateFound,
       urlChanged,
       initialized;
 
@@ -1195,7 +1195,8 @@ function Router(declarativeStates) {
   * A failed transition will leave the router in its current state.
   */
   function setState(state, params, reload) {
-    if (!reload && isSameState(state, params)) return transitionPrevented(currentState);
+    if (!reload && isSameState(state, params))
+      return transitionPrevented(currentState);
 
     var fromState, oldPreviousState;
     var toState = StateWithParams(state, params, currentPathQuery);
@@ -1213,57 +1214,83 @@ function Router(declarativeStates) {
     previousState = currentState;
     currentState = toState;
 
-    if (!urlChanged && !firstTransition && !reload) {
-      log('Updating URL: {0}', currentPathQuery);
-      updateURLFromState(currentPathQuery, document.title, currentPathQuery);
-    }
+    var previousTransition = transition;
 
-    startingTransition(fromState, toState);
-
-    transition = Transition(
+    var t = transition = Transition(
       fromState,
       toState,
       paramDiff(fromState && fromState.params, params),
-      reload);
+      reload,
+      logger);
+
+    startingTransition(fromState, toState);
+
+    // setState() was reentered because of a redirect inside a transition.started handler.
+    // The end of this method is obsolete.
+    if (transition != t) return transitionPromise(transition);
 
     transition.then(
       function success() {
-        transition = null;
+        finalizeTransition(reload);
         transitionCompleted(fromState, toState);
       },
       function fail(error) {
         currentState = transition.currentState;
-        transition = null;
+        finalizeTransition(reload);
         transitionFailed(fromState, toState, error);
       }
-    )
-    .fail(transitionError);
+    );
+
+    return transitionPromise(previousTransition || transition);
+  }
+
+  function transitionPromise(forTransition) {
+    if (forTransition.promise)
+      return forTransition.promise;
+
+    var deferred = Q.defer();
+
+    router.transition.completed.addOnce(completed);
+    router.transition.failed.addOnce(failed);
+
+    function completed(newState) {
+      router.transition.failed.remove(failed);
+      deferred.resolve(newState);
+    }
+
+    function failed(newState, oldState, error) {
+      router.transition.completed.remove(completed);
+      deferred.reject(error);
+    }
+
+    forTransition.promise = deferred.promise;
+    return forTransition.promise;
   }
 
   function transitionPrevented(toState) {
     router.transition.prevented.dispatch(toState);
+    return Q.reject(new Error('prevented'));
   }
 
   function cancelTransition() {
-    log('Cancelling existing transition from {0} to {1}',
+    logger.log('Cancelling existing transition from {0} to {1}',
       transition.from, transition.to);
 
     transition.cancel();
+
     firstTransition = false;
 
     router.transition.cancelled.dispatch(transition.to, transition.from);
   }
 
   function startingTransition(fromState, toState) {
-    log('Starting transition from {0} to {1}', fromState, toState);
+    logger.log('Starting transition from {0} to {1}', fromState, toState);
 
     router.transition.started.dispatch(toState, fromState);
   }
 
   function transitionCompleted(fromState, toState) {
-    log('Transition from {0} to {1} completed', fromState, toState);
-
-    firstTransition = false;
+    logger.log('Transition from {0} to {1} completed', fromState, toState);
 
     toState.state.lastParams = toState.params;
 
@@ -1271,19 +1298,28 @@ function Router(declarativeStates) {
   }
 
   function transitionFailed(fromState, toState, error) {
-    logError('Transition from {0} to {1} failed: {2}', fromState, toState, error);
-    router.transition.failed.dispatch(toState, fromState);
-    throw error;
-  }
+    logger.error('Transition from {0} to {1} failed: {2}', fromState, toState, error);
 
-  function transitionError(error) {
-    // Transition errors are not fatal, so just log them.
-    if (error.isTransitionError)
-      return logError(error);
+    var defaultPrevented;
+    function preventDefault() { defaultPrevented = true; }
 
-    // For developer errors, rethrow the error outside
+    router.transition.failed.dispatch(toState, fromState, error, preventDefault);
+    if (defaultPrevented) return;
+
+    // Rethrow the error outside
     // of the promise context to retain the script and line of the error.
     setTimeout(function() { throw error; }, 0);
+  }
+
+  function finalizeTransition(reload) {
+    if (!urlChanged && !firstTransition && !reload) {
+      logger.log('Updating URL: {0}', currentPathQuery);
+      updateURLFromState(currentPathQuery, document.title, currentPathQuery);
+    }
+
+    transition = null;
+    firstTransition = false;
+    router.flashData = null;
   }
 
   function updateURLFromState(state, title, url) {
@@ -1331,10 +1367,10 @@ function Router(declarativeStates) {
   * Transition to the 'notFound' state if the developer specified it or else throw an error.
   */
   function notFound(state) {
-    log('State not found: {0}', state);
+    logger.log('State not found: {0}', state);
 
     if (options.notFound)
-      setState(leafStates[options.notFound] || options.notFound, {});
+      return setState(leafStates[options.notFound] || options.notFound, {});
     else throw new Error ('State "' + state + '" could not be found');
   }
 
@@ -1364,14 +1400,14 @@ function Router(declarativeStates) {
     if (options.interceptAnchors)
       interceptAnchors(router);
 
-    log('Router init');
+    logger.log('Router init');
 
     initStates();
     logStateTree();
 
     initState = (initState !== undefined) ? initState : getInitState();
 
-    log('Initializing to state {0}', initState || '""');
+    logger.log('Initializing to state {0}', initState || '""');
     state(initState, initParams);
 
     listenToURLChanges();
@@ -1402,7 +1438,7 @@ function Router(declarativeStates) {
       // in this case, evt.state is null.
       var newState = isHashMode() ? urlPathQuery() : evt.state || urlPathQuery();
 
-      log('URL changed: {0}', newState);
+      logger.log('URL changed: {0}', newState);
       urlChanged = true;
       setStateForPathQuery(newState);
     }
@@ -1428,11 +1464,9 @@ function Router(declarativeStates) {
     eachLeafState(function(state) {
       leafStates[state.fullName] = state;
 
-      state.route = roads.addRoute(state.fullPath() + ":?query:");
-      state.route.matched.add(function() {
-        stateFound = true;
-        setState(state, fromCrossroadsParams(state, arguments));
-      });
+      var route = roads.addRoute(state.fullPath() + ":?query:");
+      state.route = route;
+      route.abyssaState = state;
     });
   }
 
@@ -1462,22 +1496,29 @@ function Router(declarativeStates) {
   * state('my.target.state', {id: 33, filter: 'desc'})
   * state('target/33?filter=desc')
   */
-  function state(pathQueryOrName, params) {
+  function state(pathQueryOrName) {
     var isName = leafStates[pathQueryOrName] !== undefined;
+    var params = isName ? arguments[1] : null;
+    var flashData = isName ? arguments[2] : arguments[1];
 
-    log('Changing state to {0}', pathQueryOrName || '""');
+    logger.log('Changing state to {0}', pathQueryOrName || '""');
+
+    router.flashData = flashData;
 
     urlChanged = false;
-    if (isName) setStateByName(pathQueryOrName, params || {});
-    else setStateForPathQuery(pathQueryOrName);
+
+    if (isName)
+      return setStateByName(pathQueryOrName, params || {});
+    else
+      return setStateForPathQuery(pathQueryOrName);
   }
 
   /*
   * An alias of 'state'. You can use 'redirect' when it makes more sense semantically.
   */
-  function redirect(pathQueryOrName, params) {
-    log('Redirecting...');
-    state(pathQueryOrName, params);
+  function redirect() {
+    logger.log('Redirecting...');
+    return state.apply(null, arguments);
   }
 
   /*
@@ -1486,7 +1527,7 @@ function Router(declarativeStates) {
   */
   function backTo(stateName, defaultParams) {
     var params = leafStates[stateName].lastParams || defaultParams;
-    state(stateName, params);
+    return state(stateName, params);
   }
 
   /*
@@ -1496,15 +1537,28 @@ function Router(declarativeStates) {
   * and the current state should update because of it.
   */
   function reload() {
-    setState(currentState.state, currentState.params, true);
+    return setState(currentState.state, currentState.params, true);
   }
 
   function setStateForPathQuery(pathQuery) {
-    currentPathQuery = util.normalizePathQuery(pathQuery);
-    stateFound = false;
-    roads.parse(currentPathQuery);
+    var promise, routeData;
 
-    if (!stateFound) notFound(currentPathQuery);
+    currentPathQuery = util.normalizePathQuery(pathQuery);
+
+    roads.routed.add(routed);
+    roads.parse(currentPathQuery);
+    roads.routed.remove(routed);
+
+    function routed(_, data) {
+      routeData = data;
+    }
+
+    if (routeData)
+      promise = setState(
+        routeData.route.abyssaState,
+        fromCrossroadsParams(routeData.route.abyssaState, routeData.params)) 
+
+    return promise || notFound(currentPathQuery);
   }
 
   function setStateByName(name, params) {
@@ -1513,7 +1567,7 @@ function Router(declarativeStates) {
     if (!state) return notFound(name);
 
     var pathQuery = state.route.interpolate(toCrossroadsParams(state, params));
-    setStateForPathQuery(pathQuery);
+    return setStateForPathQuery(pathQuery);
   }
 
   /*
@@ -1532,6 +1586,9 @@ function Router(declarativeStates) {
     return router;
   }
 
+  /*
+  * Read the path/query from the URL.
+  */
   function urlPathQuery() {
     var hashSlash = location.href.indexOf('#/');
     var pathQuery = hashSlash > -1
@@ -1623,8 +1680,15 @@ function Router(declarativeStates) {
     return previousState;
   }
 
+  /*
+  * Returns whether the router is executing its first transition.
+  */
+  function isFirstTransition() {
+    return previousState == null;
+  }
+
   function logStateTree() {
-    if (!logEnabled) return;
+    if (!logger.enabled) return;
 
     var indent = function(level) {
       if (level == 0) return '';
@@ -1644,7 +1708,7 @@ function Router(declarativeStates) {
     msg += util.objectToArray(states).map(stateTree).join('');
     msg += '\n';
 
-    log(msg);
+    logger.log(msg);
   }
 
 
@@ -1660,6 +1724,9 @@ function Router(declarativeStates) {
   router.link = link;
   router.currentState = getCurrentState;
   router.previousState = getPreviousState;
+  router.isFirstTransition = isFirstTransition;
+
+  // Used for testing
   router.urlPathQuery = urlPathQuery;
   router.terminate = terminate;
 
@@ -1684,12 +1751,14 @@ function Router(declarativeStates) {
   // Shorter alias for transition.completed: The most commonly used signal
   router.changed = router.transition.completed;
 
-  router.transition.completed.add(transitionEnded);
-  router.transition.failed.add(transitionEnded);
-  router.transition.cancelled.add(transitionEnded);
+  router.transition.completed.add(transitionEnded('completed'));
+  router.transition.failed.add(transitionEnded('failed'));
+  router.transition.cancelled.add(transitionEnded('cancelled'));
 
-  function transitionEnded(newState, oldState) {
-    router.transition.ended.dispatch(newState, oldState);
+  function transitionEnded(reason) {
+    return function(newState, oldState) {
+      router.transition.ended.dispatch(newState, oldState, reason);
+    }
   }
 
   return router;
@@ -1698,19 +1767,21 @@ function Router(declarativeStates) {
 
 // Logging
 
-var log = util.noop,
-    logError = util.noop,
-    logEnabled;
+var logger = {
+  log: util.noop,
+  error: util.noop,
+  enabled: false
+};
 
 Router.enableLogs = function() {
-  logEnabled = true;
+  logger.enabled = true;
 
-  log = function() {
+  logger.log = function() {
     var message = util.makeMessage.apply(null, arguments);
     console.log(message);
   };
 
-  logError = function() {
+  logger.error = function() {
     var message = util.makeMessage.apply(null, arguments);
     console.error(message);
   };
@@ -1719,7 +1790,7 @@ Router.enableLogs = function() {
 
 
 module.exports = Router;
-},{"./StateWithParams":5,"./Transition":6,"./anchors":7,"./util":9,"crossroads":1,"signals":2}],4:[function(require,module,exports){
+},{"./StateWithParams":5,"./Transition":6,"./anchors":7,"./util":9,"crossroads":1,"q":15,"signals":2}],4:[function(require,module,exports){
 
 'use strict';
 
@@ -1737,7 +1808,7 @@ var async = require('./Transition').asyncPromises.register;
 * State({options}) // Its path is the empty string.
 *
 * options is an object with the following optional properties:
-* enter, exit, enterPrereqs, exitPrereqs.
+* enter, update, exit.
 *
 * Child states can also be specified in the options:
 * State({ myChildStateName: State() })
@@ -1764,8 +1835,6 @@ function State() {
   state.enter = options.enter || util.noop;
   state.update = options.update;
   state.exit = options.exit || util.noop;
-  state.enterPrereqs = options.enterPrereqs;
-  state.exitPrereqs = options.exitPrereqs;
 
   state.ownData = options.data || {};
 
@@ -1874,7 +1943,9 @@ function State() {
     while (currentState.ownData[key] === undefined && currentState.parent)
       currentState = currentState.parent;
 
-    return currentState.ownData[key];
+    var flashData = state.router.flashData;
+
+    return currentState.ownData[key] || (flashData && flashData[key]);
   }
 
   function eachChildState(callback) {
@@ -2008,7 +2079,7 @@ var Q    = require('q'),
 /*
 * Create a new Transition instance.
 */
-function Transition(fromStateWithParams, toStateWithParams, paramDiff, reload) {
+function Transition(fromStateWithParams, toStateWithParams, paramDiff, reload, logger) {
   var root,
       cancelled,
       enters,
@@ -2039,11 +2110,11 @@ function Transition(fromStateWithParams, toStateWithParams, paramDiff, reload) {
 
   enters = transitionStates(toState, root, isUpdate).reverse();
 
-  transitionPromise = prereqs(enters, params, isUpdate).then(function() {
-    if (!cancelled) doTransition(enters, exits, params, transition, isUpdate);
-  });
-
   asyncPromises.newTransitionStarted();
+
+  transitionPromise = isNullTransition(isUpdate, reload, paramDiff)
+    ? Q('null')
+    : startTransition(enters, exits, params, transition, isUpdate, logger);
 
   function then(completed, failed) {
     return transitionPromise.then(
@@ -2060,46 +2131,54 @@ function Transition(fromStateWithParams, toStateWithParams, paramDiff, reload) {
 }
 
 /*
-* Return the promise of the prerequisites for all the states involved in the transition.
+* Whether there is no need to actually perform a transition.
 */
-function prereqs(enters, params, isUpdate) {
-  enters.forEach(function(state) {
-    if (!state.enterPrereqs || (isUpdate && state.update)) return;
-
-    var prereqs = state._enterPrereqs = Q(state.enterPrereqs(params)).then(
-      function success(value) {
-        if (state._enterPrereqs == prereqs) state._enterPrereqs.value = value;
-      },
-      function fail(cause) {
-        var message = util.makeMessage('Failed to resolve ENTER prereqs of "{0}"', state.fullName);
-        throw TransitionError(message, cause);
-      }
-    );
-  });
-
-  return Q.all(enters.map(function(state) {
-    return state._enterPrereqs;
-  }));
+function isNullTransition(isUpdate, reload, paramDiff) {
+  return (isUpdate && !reload && util.objectSize(paramDiff) == 0);
 }
 
-function doTransition(enters, exits, params, transition, isUpdate) {
+function startTransition(enters, exits, params, transition, isUpdate, logger) {
+  var promise = Q();
+
   exits.forEach(function(state) {
     if (isUpdate && state.update) return;
-    state.exit(state._exitPrereqs && state._exitPrereqs.value);
+    promise = promise.then(call(state, 'exit'));
   });
 
   enters.forEach(function(state) {
-    if (transition.cancelled) return;
-
-    transition.currentState = state;
-
-    if (isUpdate && state.update)
-      state.update(params);
-    else {
-      state.enter(params, state._enterPrereqs && state._enterPrereqs.value);
-      if (state.update) state.update(params);
-    }
+    var fn = (isUpdate && state.update) ? 'update' : 'enter';
+    promise = promise.then(call(state, fn));
   });
+
+  function call(state, fn) {
+    return function(value) {
+      checkCancellation();
+
+      if (logger.enabled) {
+        var capitalizedStep = fn[0].toUpperCase() + fn.slice(1);
+        logger.log(capitalizedStep + ' ' + state.fullName);
+      }
+
+      var result = state[fn](params, value);
+
+      checkCancellation();
+
+      // If the current function doesn't return anything useful,
+      // use the last known value for propagation purpose.
+      if (result === undefined) result = value;
+
+      transition.currentState = (fn == 'exit') ? state.parent : state;
+
+      return result;
+    };
+  }
+
+  function checkCancellation() {
+    if (transition.cancelled)
+      throw new Error('transition cancelled');
+  }
+
+  return promise;
 }
 
 /*
@@ -2146,18 +2225,6 @@ function withParents(state, upTo, inclusive) {
 function transitionStates(state, root, isUpdate) {
   var inclusive = !root || isUpdate;
   return withParents(state, root || state.root, inclusive);
-}
-
-function TransitionError(message, cause) {
-  var error = new Error(message);
-  error.isTransitionError = true;
-  error.cause = cause;
-
-  error.toString = function() {
-    return util.makeMessage('{0} (cause: {1})', message, cause);
-  };
-
-  return error;
 }
 
 
@@ -2257,6 +2324,14 @@ function hrefForEvent(evt) {
   if (href.charAt(0) == '#') return;
   if (anchor.getAttribute('target') == '_blank') return;
   if (!isLocalLink(anchor)) return;
+
+  // At this point, we have a valid href to follow.
+  // Did the navigation already occur on mousedown though?
+  if (evt.type == 'click' && dataNav == 'mousedown') {
+    if (evt.preventDefault) evt.preventDefault();
+    else evt.returnValue = false;
+    return;
+  }
 
   return href;
 }
@@ -5641,8 +5716,9 @@ function exit() {
   cachedNews = null;
 }
 
-function showEnter() {
+function showEnter(params) {
   dom.headerControls.html(controls);
+  showUpdate(params);
 }
 
 function showUpdate(params) {
