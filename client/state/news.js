@@ -1,6 +1,6 @@
 
 var State        = require('abyssa').State,
-    Async        = require('abyssa').Async,
+    async        = require('abyssa').async,
     Q            = require('q'),
     ContentState = require('./contentState'),
     item         = require('../state/newsItem'),
@@ -13,16 +13,14 @@ var cachedNews;
 
 var state = ContentState('news', {
   data: { title: 'News' },
-
   enter: enter,
   exit: exit,
+}, {
 
   // The default news state, showing a list of all the news.
   show: State('?color', {
-
     enter: showEnter,
     update: showUpdate
-
   }),
 
   // The state representing one news entry.
@@ -51,7 +49,7 @@ function showUpdate(params) {
 
   startLoading();
 
-  Async(getNews().then(finishedLoading)).done(news => {
+  async(getNews().then(finishedLoading)).then(news => {
 
     cachedNews = news;
 

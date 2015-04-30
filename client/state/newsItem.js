@@ -1,9 +1,10 @@
 
 var State        = require('abyssa').State,
-    Async        = require('abyssa').Async,
+    async        = require('abyssa').async,
+    router       = require('abyssa').api,
+    velocity     = require('velocity-animate'),
     mainContent  = require('../dom').mainContent,
     Q            = require('q'),
-    Zanimo       = require('zanimo'),
     spinner      = require('../spinner')(),
     showTemplate = require('../template/newsItem.hbs'),
     editTemplate = require('../template/newsItemEdit.hbs'),
@@ -17,8 +18,9 @@ var State        = require('abyssa').State,
 var state = State(':id', {
   enter: enter,
   exit: exit,
+}, {
 
-  show: State('', showEnter),
+  show: State('', { enter: showEnter }),
   edit: State('edit', {
     enter: editEnter,
     exit: editExit
@@ -37,7 +39,7 @@ function enter(params) {
     return data;
   });
 
-  news = this.async(Q.all([panel, newsData]))
+  news = async(Q.all([panel, newsData]))
     .then(values => values[1]);
 }
 
@@ -45,7 +47,7 @@ function exit() {
   $(document).off('click', onDocumentClick);
   $(document).off('keyup', onDocumentKeyup);
 
-  var destination = this.router.currentState();
+  var destination = router.current();
 
   if (destination.fullName == 'news.show')
     closePanel();
@@ -55,7 +57,7 @@ function exit() {
 }
 
 function showEnter(params) {
-  news.done(data => {
+  news.then(data => {
 
     showContent(showTemplate({
       id: params.id,
@@ -67,7 +69,7 @@ function showEnter(params) {
 }
 
 function editEnter(params) {
-  news.done(showEditMode);
+  news.then(showEditMode);
 
   function showEditMode(data) {
     showContent(editTemplate({
@@ -75,7 +77,7 @@ function editEnter(params) {
       title: data.title,
       body: newsBody(data)
     }))
-    .done(editOnKeyUp(data));
+    .then(editOnKeyUp(data));
   }
 }
 
@@ -96,18 +98,22 @@ function openPanel() {
     return 'alreadyOpened';
   else {
     panelOpened = true;
-    return Zanimo.transition(sidePanel[0], 'transform', 'translate3d(0, 0, 0)', 300, 'ease');
+
+    sidePanel[0].style.visibility = 'visible';
+
+    return velocity(sidePanel[0], { opacity: [1, 0.4], translateX: [0, '30%'] }, {
+      duration: 140,
+      ease: [0, 1, .05, 1]
+    });
   }
 }
 
-function closePanel(atOnce) {
+function closePanel() {
   panelOpened = false;
 
-  var animation = atOnce 
-    ? Zanimo.transform(sidePanel[0], 'translate3d(100%, 0, 0)', true)
-    : Zanimo.transition(sidePanel[0], 'transform', 'translate3d(100%, 0, 0)', 100, 'ease')
+  sidePanel[0].style.visibility = 'hidden';
 
-  animation.then(resetPanelContent);
+  resetPanelContent();
 }
 
 function startLoading() {
@@ -115,7 +121,7 @@ function startLoading() {
 }
 
 function showContent(content) {
-  return Async(spinner.hide()).then(_ =>
+  return async(spinner.hide()).then(_ =>
     panelContent.html(content)
   );
 }
@@ -137,7 +143,7 @@ function onDocumentKeyup(event) {
 }
 
 function backToNews() {
-  state.router.backTo('news.show');
+  router.backTo('news.show');
 }
 
 function resetPanelContent() {

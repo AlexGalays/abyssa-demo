@@ -5,8 +5,8 @@ var State = require('abyssa').State,
 /*
 * Constructor for top level states that output their content in the main area.
 */
-function ContentState(name, options) {
-  var state = State(name, options);
+function ContentState(uri, options, children) {
+  var state = State(uri, options, children);
 
   state.exit = function() {
     onContentExit(state);

@@ -106,8 +106,8 @@ section {
   background-position: left top;
   background-repeat: repeat-y;
 
-  -webkit-transform: translate3d(100%, 0, 0);
-          transform: translate3d(100%, 0, 0);
+  opacity: 0;
+  visibility: hidden;
 }
 
 #side-panel > div {
